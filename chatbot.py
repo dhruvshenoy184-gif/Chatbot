@@ -17,7 +17,7 @@ SYSTEM_PROMPT = "You are a helpful, friendly AI assistant. Be concise and clear 
 USERS_FILE = "users.json"
 HISTORY_FILE = "history.json"
 
-BOT_AVATAR = "https://i.imgur.com/PqRPoao.png"  # will be replaced below
+BOT_AVATAR = "https://play-lh.googleusercontent.com/A9D18P0Sm7s9T4LMjmuL8YWsYSGQrPABiLNh9LNvRrJlQ80HVI4hxe-GaCyi-180Cg=w240-h480-rw"  # will be replaced below
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def hash_password(password):
@@ -243,3 +243,4 @@ else:
         all_chats = load_all_chats(st.session_state.username)
         all_chats[st.session_state.current_chat] = st.session_state.messages
         save_all_chats(st.session_state.username, all_chats)
+
