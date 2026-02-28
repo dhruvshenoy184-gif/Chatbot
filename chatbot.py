@@ -1,5 +1,8 @@
+
+Copy
+
 import streamlit as st
-from openai import OpenAI
+from groq import Groq
 import json
 import os
 import hashlib
@@ -12,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 SYSTEM_PROMPT = "You are a helpful, friendly AI assistant. Be concise and clear in your responses."
 USERS_FILE = "users.json"
 HISTORY_FILE = "history.json"
@@ -63,8 +66,6 @@ if "username" not in st.session_state:
     st.session_state.username = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "auth_mode" not in st.session_state:
-    st.session_state.auth_mode = "Login"
 
 # ── Auth screen ───────────────────────────────────────────────────────────────
 if not st.session_state.logged_in:
@@ -113,18 +114,18 @@ else:
 
         model = st.selectbox(
             "Model",
-            ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
+            ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama3-8b-8192"],
             index=0,
         )
 
         st.divider()
 
-        if st.button("❌ Clear Chat", use_container_width=True):
+        if st.button("🗑️ Clear Chat", use_container_width=True):
             st.session_state.messages = []
             save_history(st.session_state.username, [])
             st.rerun()
 
-        if st.button("➜] Logout", use_container_width=True):
+        if st.button("🚪 Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = ""
             st.session_state.messages = []
@@ -153,4 +154,3 @@ else:
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
         save_history(st.session_state.username, st.session_state.messages)
-
