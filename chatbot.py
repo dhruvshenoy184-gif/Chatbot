@@ -3,6 +3,7 @@ from groq import Groq
 import json
 import os
 import hashlib
+from datetime import datetime
 
 # ── Config ────────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -47,14 +48,17 @@ def login(username, password):
         return False, "Incorrect password."
     return True, "Logged in!"
 
-def get_history(username):
+def load_all_chats(username):
     history = load_json(HISTORY_FILE)
-    return history.get(username, [])
+    return history.get(username, {})
 
-def save_history(username, messages):
+def save_all_chats(username, chats):
     history = load_json(HISTORY_FILE)
-    history[username] = messages
+    history[username] = chats
     save_json(HISTORY_FILE, history)
+
+def new_chat_id():
+    return datetime.now().strftime("Chat %b %d, %H:%M")
 
 # ── Session state defaults ────────────────────────────────────────────────────
 if "logged_in" not in st.session_state:
@@ -63,6 +67,8 @@ if "username" not in st.session_state:
     st.session_state.username = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "current_chat" not in st.session_state:
+    st.session_state.current_chat = None
 
 # ── Auth screen ───────────────────────────────────────────────────────────────
 if not st.session_state.logged_in:
@@ -82,7 +88,8 @@ if not st.session_state.logged_in:
                 if success:
                     st.session_state.logged_in = True
                     st.session_state.username = username
-                    st.session_state.messages = get_history(username)
+                    st.session_state.messages = []
+                    st.session_state.current_chat = None
                     st.rerun()
                 else:
                     st.error(msg)
@@ -106,7 +113,7 @@ if not st.session_state.logged_in:
 else:
     with st.sidebar:
         st.title("⚙️ Settings")
-        st.markdown(f"👤 Logged in as **{st.session_state.username}**")
+        st.markdown(f"👤 **{st.session_state.username}**")
         st.divider()
 
         model = st.selectbox(
@@ -117,15 +124,41 @@ else:
 
         st.divider()
 
-        if st.button("🗑️ Clear Chat", use_container_width=True):
+        # New Chat button
+        if st.button("➕ New Chat", use_container_width=True, type="primary"):
             st.session_state.messages = []
-            save_history(st.session_state.username, [])
+            st.session_state.current_chat = None
             st.rerun()
 
-        if st.button("➜] Logout", use_container_width=True):
+        # Chat history list
+        st.markdown("### 💬 Past Chats")
+        all_chats = load_all_chats(st.session_state.username)
+        if all_chats:
+            for chat_id in reversed(list(all_chats.keys())):
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    if st.button(chat_id, use_container_width=True, key=f"load_{chat_id}"):
+                        st.session_state.messages = all_chats[chat_id]
+                        st.session_state.current_chat = chat_id
+                        st.rerun()
+                with col2:
+                    if st.button("🗑️", key=f"del_{chat_id}"):
+                        del all_chats[chat_id]
+                        save_all_chats(st.session_state.username, all_chats)
+                        if st.session_state.current_chat == chat_id:
+                            st.session_state.messages = []
+                            st.session_state.current_chat = None
+                        st.rerun()
+        else:
+            st.caption("No past chats yet.")
+
+        st.divider()
+
+        if st.button("🚪 Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = ""
             st.session_state.messages = []
+            st.session_state.current_chat = None
             st.rerun()
 
     st.title("✨ Quantum AI")
@@ -136,6 +169,10 @@ else:
             st.markdown(msg["content"])
 
     if prompt := st.chat_input("Type your message..."):
+        # Create a new chat ID if this is a fresh chat
+        if st.session_state.current_chat is None:
+            st.session_state.current_chat = new_chat_id()
+
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -150,6 +187,8 @@ else:
             st.markdown(reply)
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
-        save_history(st.session_state.username, st.session_state.messages)
 
-
+        # Save to the current chat
+        all_chats = load_all_chats(st.session_state.username)
+        all_chats[st.session_state.current_chat] = st.session_state.messages
+        save_all_chats(st.session_state.username, all_chats)
