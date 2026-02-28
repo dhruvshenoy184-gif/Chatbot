@@ -122,7 +122,7 @@ else:
             save_history(st.session_state.username, [])
             st.rerun()
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("➜] Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = ""
             st.session_state.messages = []
@@ -151,4 +151,5 @@ else:
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
         save_history(st.session_state.username, st.session_state.messages)
+
 
