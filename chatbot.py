@@ -1,6 +1,3 @@
-
-Copy
-
 import streamlit as st
 from groq import Groq
 import json
@@ -154,3 +151,4 @@ else:
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
         save_history(st.session_state.username, st.session_state.messages)
+
