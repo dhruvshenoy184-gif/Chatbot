@@ -206,7 +206,7 @@ else:
 
         st.divider()
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("➜] Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = ""
             st.session_state.messages = []
@@ -243,5 +243,6 @@ else:
         all_chats = load_all_chats(st.session_state.username)
         all_chats[st.session_state.current_chat] = st.session_state.messages
         save_all_chats(st.session_state.username, all_chats)
+
 
 
