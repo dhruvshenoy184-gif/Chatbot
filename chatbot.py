@@ -17,6 +17,8 @@ SYSTEM_PROMPT = "You are a helpful, friendly AI assistant. Be concise and clear 
 USERS_FILE = "users.json"
 HISTORY_FILE = "history.json"
 
+BOT_AVATAR = "https://i.imgur.com/PqRPoao.png"  # will be replaced below
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -35,7 +37,7 @@ def signup(username, password):
     users = load_json(USERS_FILE)
     if username in users:
         return False, "Username already exists."
-    users[username] = hash_password(password)
+    users[username] = {"password": hash_password(password), "avatar": None}
     save_json(USERS_FILE, users)
     return True, "Account created!"
 
@@ -43,9 +45,26 @@ def login(username, password):
     users = load_json(USERS_FILE)
     if username not in users:
         return False, "Username not found."
-    if users[username] != hash_password(password):
+    user = users[username]
+    stored_pw = user["password"] if isinstance(user, dict) else user
+    if stored_pw != hash_password(password):
         return False, "Incorrect password."
     return True, "Logged in!"
+
+def get_user_avatar(username):
+    users = load_json(USERS_FILE)
+    user = users.get(username, {})
+    if isinstance(user, dict):
+        return user.get("avatar", None)
+    return None
+
+def set_user_avatar(username, avatar_url):
+    users = load_json(USERS_FILE)
+    if isinstance(users[username], dict):
+        users[username]["avatar"] = avatar_url
+    else:
+        users[username] = {"password": users[username], "avatar": avatar_url}
+    save_json(USERS_FILE, users)
 
 def load_all_chats(username):
     history = load_json(HISTORY_FILE)
@@ -66,6 +85,14 @@ def generate_chat_title(first_message):
         max_tokens=20,
     )
     return response.choices[0].message.content.strip().strip('"')
+
+def user_avatar_display(username):
+    avatar = get_user_avatar(username)
+    if avatar:
+        return avatar
+    # Generate initial avatar using a free avatar API
+    initial = username[0].upper()
+    return f"https://ui-avatars.com/api/?name={initial}&background=6d28d9&color=fff&size=128&font-size=0.6&bold=true"
 
 # ── Session state defaults ────────────────────────────────────────────────────
 if "logged_in" not in st.session_state:
@@ -118,9 +145,29 @@ if not st.session_state.logged_in:
 
 # ── Main chat app ─────────────────────────────────────────────────────────────
 else:
+    BOT_AVATAR = "https://i.imgur.com/4yGVpBl.png"  # Quantum AI logo placeholder
+
     with st.sidebar:
         st.title("⚙️ Settings")
+
+        # User avatar preview + change option
+        avatar_url = user_avatar_display(st.session_state.username)
+        st.image(avatar_url, width=60)
         st.markdown(f"👤 **{st.session_state.username}**")
+
+        with st.expander("Change Avatar"):
+            new_avatar = st.text_input("Paste image URL", placeholder="https://...")
+            if st.button("Save Avatar", use_container_width=True):
+                if new_avatar.startswith("http"):
+                    set_user_avatar(st.session_state.username, new_avatar)
+                    st.success("Avatar updated!")
+                    st.rerun()
+                else:
+                    st.error("Please enter a valid URL.")
+            if st.button("Reset to Default", use_container_width=True):
+                set_user_avatar(st.session_state.username, None)
+                st.rerun()
+
         st.divider()
 
         model = st.selectbox(
@@ -159,7 +206,7 @@ else:
 
         st.divider()
 
-        if st.button("➜] Logout", use_container_width=True):
+        if st.button("🚪 Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = ""
             st.session_state.messages = []
@@ -170,15 +217,16 @@ else:
     st.caption("Ask me anything")
 
     for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
+        avatar = BOT_AVATAR if msg["role"] == "assistant" else user_avatar_display(st.session_state.username)
+        with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(msg["content"])
 
     if prompt := st.chat_input("Type your message..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar=user_avatar_display(st.session_state.username)):
             st.markdown(prompt)
 
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=BOT_AVATAR):
             with st.spinner("Thinking..."):
                 response = client.chat.completions.create(
                     model=model,
@@ -189,7 +237,6 @@ else:
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
 
-        # Generate AI title on first message
         if st.session_state.current_chat is None:
             st.session_state.current_chat = generate_chat_title(prompt)
 
