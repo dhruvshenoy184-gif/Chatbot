@@ -3,7 +3,6 @@ from groq import Groq
 import json
 import os
 import hashlib
-from datetime import datetime
 
 # ── Config ────────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -57,8 +56,16 @@ def save_all_chats(username, chats):
     history[username] = chats
     save_json(HISTORY_FILE, history)
 
-def new_chat_id():
-    return datetime.now().strftime("Chat %b %d, %H:%M")
+def generate_chat_title(first_message):
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": "Generate a very short 3-5 word title for a chat that starts with this message. Reply with ONLY the title, nothing else."},
+            {"role": "user", "content": first_message}
+        ],
+        max_tokens=20,
+    )
+    return response.choices[0].message.content.strip().strip('"')
 
 # ── Session state defaults ────────────────────────────────────────────────────
 if "logged_in" not in st.session_state:
@@ -124,13 +131,11 @@ else:
 
         st.divider()
 
-        # New Chat button
         if st.button("➕ New Chat", use_container_width=True, type="primary"):
             st.session_state.messages = []
             st.session_state.current_chat = None
             st.rerun()
 
-        # Chat history list
         st.markdown("### 💬 Past Chats")
         all_chats = load_all_chats(st.session_state.username)
         if all_chats:
@@ -154,7 +159,7 @@ else:
 
         st.divider()
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("➜] Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = ""
             st.session_state.messages = []
@@ -169,10 +174,6 @@ else:
             st.markdown(msg["content"])
 
     if prompt := st.chat_input("Type your message..."):
-        # Create a new chat ID if this is a fresh chat
-        if st.session_state.current_chat is None:
-            st.session_state.current_chat = new_chat_id()
-
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -188,7 +189,10 @@ else:
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
 
-        # Save to the current chat
+        # Generate AI title on first message
+        if st.session_state.current_chat is None:
+            st.session_state.current_chat = generate_chat_title(prompt)
+
         all_chats = load_all_chats(st.session_state.username)
         all_chats[st.session_state.current_chat] = st.session_state.messages
         save_all_chats(st.session_state.username, all_chats)
