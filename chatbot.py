@@ -3,7 +3,6 @@ from groq import Groq
 import json
 import os
 import hashlib
-import time
 
 # ── Config ────────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -17,7 +16,7 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 SYSTEM_PROMPT = "You are a helpful, friendly AI assistant. Be concise and clear in your responses."
 USERS_FILE = "users.json"
 HISTORY_FILE = "history.json"
-BOT_AVATAR = "✨"
+BOT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg?seed=quantum&backgroundColor=6d28d9"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def hash_password(password):
