@@ -3,6 +3,7 @@ from groq import Groq
 import json
 import os
 import hashlib
+import time
 
 # ── Config ────────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -16,8 +17,7 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 SYSTEM_PROMPT = "You are a helpful, friendly AI assistant. Be concise and clear in your responses."
 USERS_FILE = "users.json"
 HISTORY_FILE = "history.json"
-
-BOT_AVATAR = "✨"  # will be replaced below
+BOT_AVATAR = "✨"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def hash_password(password):
@@ -90,19 +90,31 @@ def user_avatar_display(username):
     avatar = get_user_avatar(username)
     if avatar:
         return avatar
-    # Generate initial avatar using a free avatar API
     initial = username[0].upper()
     return f"https://ui-avatars.com/api/?name={initial}&background=6d28d9&color=fff&size=128&font-size=0.6&bold=true"
 
+def stream_response(model, messages):
+    stream = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+        stream=True,
+    )
+    for chunk in stream:
+        content = chunk.choices[0].delta.content
+        if content:
+            yield content
+
 # ── Session state defaults ────────────────────────────────────────────────────
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = ""
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "current_chat" not in st.session_state:
-    st.session_state.current_chat = None
+for key, default in {
+    "logged_in": False,
+    "username": "",
+    "messages": [],
+    "current_chat": None,
+    "editing_index": None,
+    "renaming_chat": None,
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 # ── Auth screen ───────────────────────────────────────────────────────────────
 if not st.session_state.logged_in:
@@ -111,7 +123,6 @@ if not st.session_state.logged_in:
     st.divider()
 
     auth_mode = st.radio("", ["Login", "Sign Up"], horizontal=True, label_visibility="collapsed")
-
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
@@ -145,12 +156,9 @@ if not st.session_state.logged_in:
 
 # ── Main chat app ─────────────────────────────────────────────────────────────
 else:
-    BOT_AVATAR = "https://i.imgur.com/4yGVpBl.png"  # Quantum AI logo placeholder
-
     with st.sidebar:
         st.title("⚙️ Settings")
 
-        # User avatar preview + change option
         avatar_url = user_avatar_display(st.session_state.username)
         st.image(avatar_url, width=60)
         st.markdown(f"👤 **{st.session_state.username}**")
@@ -181,32 +189,55 @@ else:
         if st.button("➕ New Chat", use_container_width=True, type="primary"):
             st.session_state.messages = []
             st.session_state.current_chat = None
+            st.session_state.editing_index = None
             st.rerun()
 
         st.markdown("### 💬 Past Chats")
         all_chats = load_all_chats(st.session_state.username)
         if all_chats:
             for chat_id in reversed(list(all_chats.keys())):
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    if st.button(chat_id, use_container_width=True, key=f"load_{chat_id}"):
-                        st.session_state.messages = all_chats[chat_id]
-                        st.session_state.current_chat = chat_id
-                        st.rerun()
-                with col2:
-                    if st.button("🗑️", key=f"del_{chat_id}"):
-                        del all_chats[chat_id]
-                        save_all_chats(st.session_state.username, all_chats)
-                        if st.session_state.current_chat == chat_id:
-                            st.session_state.messages = []
-                            st.session_state.current_chat = None
-                        st.rerun()
+                if st.session_state.renaming_chat == chat_id:
+                    new_name = st.text_input("Rename chat", value=chat_id, key=f"rename_{chat_id}", label_visibility="collapsed")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ Save", key=f"save_rename_{chat_id}", use_container_width=True):
+                            if new_name and new_name != chat_id:
+                                all_chats[new_name] = all_chats.pop(chat_id)
+                                save_all_chats(st.session_state.username, all_chats)
+                                if st.session_state.current_chat == chat_id:
+                                    st.session_state.current_chat = new_name
+                            st.session_state.renaming_chat = None
+                            st.rerun()
+                    with col2:
+                        if st.button("❌ Cancel", key=f"cancel_rename_{chat_id}", use_container_width=True):
+                            st.session_state.renaming_chat = None
+                            st.rerun()
+                else:
+                    col1, col2, col3 = st.columns([4, 1, 1])
+                    with col1:
+                        if st.button(chat_id, use_container_width=True, key=f"load_{chat_id}"):
+                            st.session_state.messages = all_chats[chat_id]
+                            st.session_state.current_chat = chat_id
+                            st.session_state.editing_index = None
+                            st.rerun()
+                    with col2:
+                        if st.button("✏️", key=f"rename_btn_{chat_id}"):
+                            st.session_state.renaming_chat = chat_id
+                            st.rerun()
+                    with col3:
+                        if st.button("🗑️", key=f"del_{chat_id}"):
+                            del all_chats[chat_id]
+                            save_all_chats(st.session_state.username, all_chats)
+                            if st.session_state.current_chat == chat_id:
+                                st.session_state.messages = []
+                                st.session_state.current_chat = None
+                            st.rerun()
         else:
             st.caption("No past chats yet.")
 
         st.divider()
 
-        if st.button("➜] Logout", use_container_width=True):
+        if st.button("🚪 Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = ""
             st.session_state.messages = []
@@ -216,10 +247,37 @@ else:
     st.title("✨ Quantum AI")
     st.caption("Ask me anything")
 
-    for msg in st.session_state.messages:
+    for i, msg in enumerate(st.session_state.messages):
         avatar = BOT_AVATAR if msg["role"] == "assistant" else user_avatar_display(st.session_state.username)
+
         with st.chat_message(msg["role"], avatar=avatar):
-            st.markdown(msg["content"])
+            if msg["role"] == "user" and st.session_state.editing_index == i:
+                edited = st.text_area("Edit message", value=msg["content"], key=f"edit_{i}", label_visibility="collapsed")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Send", key=f"confirm_edit_{i}", use_container_width=True):
+                        st.session_state.messages = st.session_state.messages[:i]
+                        st.session_state.messages.append({"role": "user", "content": edited})
+                        st.session_state.editing_index = None
+                        with st.chat_message("assistant", avatar=BOT_AVATAR):
+                            reply = st.write_stream(stream_response(model, st.session_state.messages))
+                        st.session_state.messages.append({"role": "assistant", "content": reply})
+                        if st.session_state.current_chat is None:
+                            st.session_state.current_chat = generate_chat_title(edited)
+                        all_chats = load_all_chats(st.session_state.username)
+                        all_chats[st.session_state.current_chat] = st.session_state.messages
+                        save_all_chats(st.session_state.username, all_chats)
+                        st.rerun()
+                with col2:
+                    if st.button("❌ Cancel", key=f"cancel_edit_{i}", use_container_width=True):
+                        st.session_state.editing_index = None
+                        st.rerun()
+            else:
+                st.markdown(msg["content"])
+                if msg["role"] == "user":
+                    if st.button("✏️ Edit", key=f"edit_btn_{i}"):
+                        st.session_state.editing_index = i
+                        st.rerun()
 
     if prompt := st.chat_input("Type your message..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -227,13 +285,7 @@ else:
             st.markdown(prompt)
 
         with st.chat_message("assistant", avatar=BOT_AVATAR):
-            with st.spinner("Thinking..."):
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "system", "content": SYSTEM_PROMPT}] + st.session_state.messages,
-                )
-                reply = response.choices[0].message.content
-            st.markdown(reply)
+            reply = st.write_stream(stream_response(model, st.session_state.messages))
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
 
@@ -243,6 +295,3 @@ else:
         all_chats = load_all_chats(st.session_state.username)
         all_chats[st.session_state.current_chat] = st.session_state.messages
         save_all_chats(st.session_state.username, all_chats)
-
-
-
