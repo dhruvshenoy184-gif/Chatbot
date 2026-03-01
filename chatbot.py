@@ -6,7 +6,7 @@ import hashlib
 
 # ── Config ────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Quantum AI",
+    page_title="Obsidian",
     page_icon="✨",
     layout="centered",
     initial_sidebar_state="expanded",
@@ -16,7 +16,7 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 SYSTEM_PROMPT = "You are a helpful, friendly AI assistant. Be concise and clear in your responses."
 USERS_FILE = "users.json"
 HISTORY_FILE = "history.json"
-BOT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg?seed=quantum&backgroundColor=6d28d9"
+BOT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg?seed=obsidian&backgroundColor=6d28d9"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def hash_password(password):
@@ -117,7 +117,7 @@ for key, default in {
 
 # ── Auth screen ───────────────────────────────────────────────────────────────
 if not st.session_state.logged_in:
-    st.title("✨ Quantum AI")
+    st.title("✨ Obsidian")
     st.caption("Please log in or sign up to continue")
     st.divider()
 
@@ -236,14 +236,14 @@ else:
 
         st.divider()
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("◀️ Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = ""
             st.session_state.messages = []
             st.session_state.current_chat = None
             st.rerun()
 
-    st.title("✨ Quantum AI")
+    st.title("✨ Obsidian")
     st.caption("Ask me anything")
 
     for i, msg in enumerate(st.session_state.messages):
